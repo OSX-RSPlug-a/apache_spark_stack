@@ -1,7 +1,9 @@
 # apache_spark_stack
 
 Datalake local env with apache Spark;
+
 Criação de um Datalake utilizando ferramentas open-source.
+
 
 ## Uso
 
@@ -26,7 +28,3 @@ PREFECT_ORION_API_HOST = http://prefect-server:4200
 PREFECT_API_URL = http://prefect-server:4200/api
 PREFECT_DATA_PATH = 
 ```
-
-## Arquitetura
-
-![Esquema de fluxo de orquestração, ingestão e armazenamento de dados](workflow.jpeg)
