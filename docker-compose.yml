@@ -1,0 +1,122 @@
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ${MINIO_DATA_PATH}:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - datalake-network
+
+
+  spark-master:
+    image: bitnami/spark:3.5.5
+    container_name: spark-master
+    restart: always
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_CORES=4
+      - SPARK_MASTER_MEMORY=4g
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - spark_data:/opt/spark/work-dir
+      - ./config/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+    networks:
+      - datalake-network
+
+
+  spark-worker:
+    image: bitnami/spark:3.5.5
+    container_name: spark-worker
+    restart: always
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_WORKER_CORES=4
+      - SPARK_WORKER_MEMORY=4g
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - spark_data:/opt/spark/work-dir
+      - ./config/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+    networks:
+      - datalake-network
+
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-server
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./orchestration:/app
+      - ${PREFECT_DATA_PATH}:/root/.prefect
+    working_dir: /app
+    environment:
+      PREFECT_ORION_API_HOST: ${PREFECT_ORION_API_HOST}
+    restart: always
+    networks:
+      - datalake-network
+
+  prefect-worker-01:
+    build:
+      context: images/worker
+      dockerfile: Dockerfile
+    container_name: prefect-worker-01
+    command: prefect worker start --pool work-pool-01 --name worker-01
+    depends_on:
+      - prefect-server
+    working_dir: /app
+    environment:
+      PREFECT_API_URL: ${PREFECT_API_URL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./orchestration:/app
+    restart: always
+    networks:
+      - datalake-network
+
+
+  executer:
+    build:
+      context: images/executer
+      dockerfile: Dockerfile
+    container_name: executer
+    env_file:
+      - .env
+    working_dir: /app
+    volumes:
+      - ./orchestration:/app
+      - ./config/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./.fastf1:/.fastf1
+    depends_on:
+      - prefect-server
+      - prefect-worker-01
+      - spark-master
+      - spark-worker
+    restart: always
+    networks:
+      - datalake-network
+
+volumes:
+  minio_data:
+  spark_data:
+
+networks:
+  datalake-network:
+    name: datalake-network
+    external: true

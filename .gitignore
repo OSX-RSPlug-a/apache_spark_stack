@@ -1,0 +1,21 @@
+# nohup
+nohup.out
+
+# env files
+*.env
+
+# spark files
+spark-defaults.conf
+
+# minio files
+minio_data/
+
+# prefect filtes
+prefect_data/
+
+# f1 cache files
+.fastf1
+
+# python
+*.pyc
+__pycache__
